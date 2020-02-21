@@ -9,6 +9,7 @@ from selenium.common.exceptions import TimeoutException, WebDriverException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 
 
 class Session(requests.Session):
@@ -91,9 +92,13 @@ class Session(requests.Session):
                     type(self.webdriver_options['arguments'])))
 
         # Create driver process
+##        chrome_options.add_experimental_option('w3c', False)
+##        caps = DesiredCapabilities().CHROME
+##        caps["pageLoadStrategy"] = "none"
         return RequestiumChrome(self.webdriver_path,
                                 chrome_options=chrome_options,
                                 default_timeout=self.default_timeout)
+##                                desired_capabilities=caps)
 
     def transfer_session_cookies_to_driver(self, domain=None):
         """Copies the Session's cookies into the webdriver
@@ -110,8 +115,12 @@ class Session(requests.Session):
 
         # Transfer cookies
         for c in [c for c in self.cookies if domain in c.domain]:
-            self.driver.ensure_add_cookie({'name': c.name, 'value': c.value, 'path': c.path,
-                                           'expiry': c.expires, 'domain': c.domain})
+            if c.expires:
+                self.driver.ensure_add_cookie({'name': c.name, 'value': c.value, 'path': c.path,
+                                               'expiry': c.expires, 'domain': c.domain})
+            else:
+                self.driver.ensure_add_cookie({'name': c.name, 'value': c.value, 'path': c.path,
+                                               'domain': c.domain})
 
     def transfer_driver_cookies_to_session(self, copy_user_agent=True):
         if copy_user_agent:
@@ -232,12 +241,21 @@ class DriverMixin(object):
 
         # Fixes phantomjs bug, all domains must start with a period
         if self.name == "phantomjs": cookie['domain'] = '.' + cookie['domain']
-        self.add_cookie(cookie)
+##        cookie["expiry"] = int(cookie["expiry"]*1000)
+##        print(cookie)
+        try:
+            self.add_cookie(cookie)
+        except:
+            pass
 
         # If we fail adding the cookie, retry with a more permissive domain
         if not self.is_cookie_in_driver(cookie):
             cookie['domain'] = tldextract.extract(cookie['domain']).registered_domain
-            self.add_cookie(cookie)
+            try:
+                self.add_cookie(cookie)
+            except:
+                pass
+                return
             if not self.is_cookie_in_driver(cookie):
                 raise WebDriverException(
                     "Couldn't add the following cookie to the webdriver\n{}\n".format(cookie)
